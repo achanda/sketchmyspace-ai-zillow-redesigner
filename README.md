@@ -2,7 +2,7 @@
 
 A production-ready full-stack AI chat application built on Cloudflare Workers using the Agents SDK. Features multi-session conversations, streaming responses, tool calling (weather, web search, MCP integration), model switching, and a modern React UI with Tailwind CSS and shadcn/ui.
 
-[cloudflarebutton]
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/achanda/sketchmyspace-ai-zillow-redesigner)
 
 ## ✨ Key Features
 
@@ -103,7 +103,7 @@ npx wrangler deploy
 
 **Custom Domain**: Update `wrangler.toml` or Dashboard.
 
-[cloudflarebutton]
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/achanda/sketchmyspace-ai-zillow-redesigner)
 
 **Assets SPA**: Static assets served via Workers Sites (SPA fallback).
 
