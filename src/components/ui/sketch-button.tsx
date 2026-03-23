@@ -1,24 +1,24 @@
 import React from 'react';
-import { motion, HTMLMotionProps } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-interface SketchButtonProps extends HTMLMotionProps<"button"> {
+interface SketchButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
   variant?: 'primary' | 'secondary';
   isLoading?: boolean;
 }
-export function SketchButton({
-  children,
-  className,
-  variant = 'primary',
+export function SketchButton({ 
+  children, 
+  className, 
+  variant = 'primary', 
   isLoading,
-  ...props
+  ...props 
 }: SketchButtonProps) {
   return (
     <motion.button
       whileHover={{ scale: 1.05, rotate: 1 }}
       whileTap={{ scale: 0.95 }}
       className={cn(
-        "relative px-8 py-3 font-sketch text-xl transition-colors sketch-border sketch-shadow disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center",
+        "relative px-8 py-3 font-sketch text-xl transition-colors sketch-border sketch-shadow disabled:opacity-50 disabled:cursor-not-allowed",
         variant === 'primary' ? "bg-sketch-orange text-charcoal hover:bg-orange-400" : "bg-white text-charcoal hover:bg-paper",
         className
       )}
