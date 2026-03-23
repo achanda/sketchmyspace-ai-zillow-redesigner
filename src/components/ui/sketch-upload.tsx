@@ -1,51 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, X } from 'lucide-react';
+import { Upload, X, Image as ImageIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
-interface FilePreviewProps {
-  file: File;
-  onRemove: () => void;
-}
-function FilePreview({ file, onRemove }: FilePreviewProps) {
-  const [previewUrl, setPreviewUrl] = useState<string>('');
-  useEffect(() => {
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    return () => {
-      URL.revokeObjectURL(url);
-    };
-  }, [file]);
-  return (
-    <motion.div
-      initial={{ scale: 0.8, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      exit={{ scale: 0.8, opacity: 0 }}
-      className="relative group aspect-square sketch-border bg-white overflow-hidden"
-    >
-      {previewUrl && (
-        <img
-          src={previewUrl}
-          alt="Preview"
-          className="w-full h-full object-cover"
-        />
-      )}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove();
-        }}
-        className="absolute top-1 right-1 p-1 bg-white sketch-border sketch-shadow-sm hover:bg-red-50 transition-colors z-10"
-      >
-        <X size={14} className="text-red-500" />
-      </button>
-      <div className="absolute bottom-0 inset-x-0 bg-charcoal/80 p-1">
-        <p className="text-[10px] text-white truncate font-medium">{file.name}</p>
-      </div>
-    </motion.div>
-  );
-}
 interface SketchUploadProps {
   files: File[];
   setFiles: React.Dispatch<React.SetStateAction<File[]>>;
@@ -94,7 +51,7 @@ export function SketchUpload({ files, setFiles, className }: SketchUploadProps) 
           </p>
         </div>
       </div>
-      <AnimatePresence initial={false}>
+      <AnimatePresence>
         {files.length > 0 && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
@@ -103,11 +60,28 @@ export function SketchUpload({ files, setFiles, className }: SketchUploadProps) 
             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4"
           >
             {files.map((file, idx) => (
-              <FilePreview 
-                key={`${file.name}-${idx}`} 
-                file={file} 
-                onRemove={() => removeFile(idx)} 
-              />
+              <motion.div
+                key={`${file.name}-${idx}`}
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.8, opacity: 0 }}
+                className="relative group aspect-square sketch-border bg-white overflow-hidden"
+              >
+                <img
+                  src={URL.createObjectURL(file)}
+                  alt="Preview"
+                  className="w-full h-full object-cover"
+                />
+                <button
+                  onClick={() => removeFile(idx)}
+                  className="absolute top-1 right-1 p-1 bg-white sketch-border sketch-shadow-sm hover:bg-red-50 transition-colors"
+                >
+                  <X size={14} className="text-red-500" />
+                </button>
+                <div className="absolute bottom-0 inset-x-0 bg-charcoal/80 p-1">
+                  <p className="text-[10px] text-white truncate font-medium">{file.name}</p>
+                </div>
+              </motion.div>
             ))}
           </motion.div>
         )}

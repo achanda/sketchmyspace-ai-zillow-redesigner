@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, PencilLine, ArrowRight, RefreshCw, AlertCircle } from 'lucide-react';
+import { Sparkles, PencilLine, ArrowRight, RefreshCw, AlertCircle, Link as LinkIcon, Upload as UploadIcon } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Toaster, toast } from 'sonner';
 import { SketchButton } from '@/components/ui/sketch-button';
 import { RoomCard } from '@/components/ui/room-card';
+import { SketchUpload } from '@/components/ui/sketch-upload';
 import { chatService } from '@/lib/chat';
+import { cn } from '@/lib/utils';
 type AppState = 'idle' | 'sketching' | 'gallery' | 'error';
+type InputMode = 'url' | 'upload';
 interface Room {
   name: string;
   before: string;
@@ -16,31 +19,45 @@ interface Room {
 }
 export function HomePage() {
   const [url, setUrl] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
+  const [mode, setMode] = useState<InputMode>('url');
   const [status, setStatus] = useState<AppState>('idle');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [error, setError] = useState('');
   const handleRedesign = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!url.includes('zillow.com')) {
-      toast.error("Oops!", { description: "Please enter a valid Zillow listing URL!" });
-      return;
+    if (mode === 'url') {
+      if (!url.includes('zillow.com')) {
+        toast.error("Oops!", { description: "Please enter a valid Zillow listing URL!" });
+        return;
+      }
+    } else {
+      if (files.length === 0) {
+        toast.error("Empty Desk!", { description: "Please upload at least one room photo first!" });
+        return;
+      }
     }
     setStatus('sketching');
     setError('');
     try {
-      // Hidden prompt instructions for structured JSON response
-      const prompt = `Please use the mock_zillow_redesign tool to analyze this URL: ${url}. 
-      Return the results as a JSON object with a "rooms" array, where each room has "name", "before", "after", and "description".
-      Strictly return ONLY the JSON string.`;
+      let prompt = '';
+      if (mode === 'url') {
+        prompt = `Please use the mock_zillow_redesign tool to analyze this URL: ${url}.
+        Return the results as a JSON object with a "rooms" array, where each room has "name", "before", "after", and "description".
+        Strictly return ONLY the JSON string.`;
+      } else {
+        const filenames = files.map(f => f.name);
+        prompt = `I have uploaded these room photos: ${filenames.join(', ')}. 
+        Please use the mock_upload_redesign tool to create makeovers for them.
+        Return the results as a JSON object with a "rooms" array, where each room has "name", "before", "after", and "description".
+        Strictly return ONLY the JSON string.`;
+      }
       const response = await chatService.sendMessage(prompt);
       if (response.success) {
-        // Find the tool result in messages or simulate parsing the last assistant message
-        // In this template, the tool result content is usually embedded in the last response
         const messagesRes = await chatService.getMessages();
         const lastMsg = messagesRes.data?.messages.slice().reverse().find(m => m.role === 'assistant');
         if (lastMsg) {
           try {
-            // Find JSON in the content
             const jsonMatch = lastMsg.content.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
               const data = JSON.parse(jsonMatch[0]);
@@ -72,6 +89,7 @@ export function HomePage() {
   const handleReset = () => {
     setStatus('idle');
     setUrl('');
+    setFiles([]);
     setRooms([]);
   };
   return (
@@ -89,38 +107,78 @@ export function HomePage() {
         <main className="py-8 md:py-12 lg:py-16">
           <AnimatePresence mode="wait">
             {status === 'idle' && (
-              <motion.div 
+              <motion.div
                 key="hero"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="max-w-3xl mx-auto text-center space-y-12"
+                className="max-w-4xl mx-auto text-center space-y-12"
               >
                 <div className="space-y-6">
                   <h2 className="text-6xl md:text-8xl font-sketch leading-tight">
-                    Dream big with <br/> 
+                    Dream big with <br/>
                     <span className="bg-sketch-orange px-4 -rotate-1 inline-block">your new home.</span>
                   </h2>
                   <p className="text-xl md:text-2xl font-medium text-muted-foreground italic">
-                    Paste a Zillow URL and let our AI sketch the future of your space.
+                    Paste a Zillow URL or upload your own photos to sketch the future.
                   </p>
                 </div>
-                <form onSubmit={handleRedesign} className="relative group max-w-2xl mx-auto">
-                  <input
-                    type="text"
-                    placeholder="https://www.zillow.com/homedetails/..."
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    className="w-full px-8 py-6 text-xl sketch-border sketch-shadow focus:outline-none focus:ring-4 focus:ring-sketch-orange/20 transition-all placeholder:text-muted-foreground/50 bg-white"
-                  />
-                  <SketchButton 
-                    type="submit"
-                    className="mt-6 md:absolute md:right-4 md:top-1/2 md:-translate-y-1/2 md:mt-0"
-                  >
-                    Magic Redesign
-                  </SketchButton>
-                </form>
-                <div className="flex justify-center gap-8 pt-8">
+                <div className="max-w-2xl mx-auto space-y-8">
+                  {/* Mode Toggles */}
+                  <div className="flex justify-center gap-4">
+                    <button
+                      onClick={() => setMode('url')}
+                      className={cn(
+                        "px-6 py-2 font-sketch text-lg transition-all sketch-border",
+                        mode === 'url' ? "bg-sketch-orange sketch-shadow" : "bg-white opacity-60 hover:opacity-100"
+                      )}
+                    >
+                      <LinkIcon size={18} className="inline mr-2" /> Zillow URL
+                    </button>
+                    <button
+                      onClick={() => setMode('upload')}
+                      className={cn(
+                        "px-6 py-2 font-sketch text-lg transition-all sketch-border",
+                        mode === 'upload' ? "bg-sketch-orange sketch-shadow" : "bg-white opacity-60 hover:opacity-100"
+                      )}
+                    >
+                      <UploadIcon size={18} className="inline mr-2" /> My Photos
+                    </button>
+                  </div>
+                  <form onSubmit={handleRedesign} className="space-y-6">
+                    <AnimatePresence mode="wait">
+                      {mode === 'url' ? (
+                        <motion.div
+                          key="url-input"
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 20 }}
+                        >
+                          <input
+                            type="text"
+                            placeholder="https://www.zillow.com/homedetails/..."
+                            value={url}
+                            onChange={(e) => setUrl(e.target.value)}
+                            className="w-full px-8 py-6 text-xl sketch-border sketch-shadow focus:outline-none focus:ring-4 focus:ring-sketch-orange/20 transition-all placeholder:text-muted-foreground/50 bg-white"
+                          />
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key="upload-input"
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -20 }}
+                        >
+                          <SketchUpload files={files} setFiles={setFiles} />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                    <SketchButton type="submit" className="w-full md:w-auto mx-auto" isLoading={status === 'sketching'}>
+                      Magic Redesign
+                    </SketchButton>
+                  </form>
+                </div>
+                <div className="flex flex-wrap justify-center gap-8 pt-8">
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Sparkles className="text-sketch-orange" />
                     <span>AI-Powered Insights</span>
@@ -133,7 +191,7 @@ export function HomePage() {
               </motion.div>
             )}
             {status === 'sketching' && (
-              <motion.div 
+              <motion.div
                 key="loading"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -142,7 +200,7 @@ export function HomePage() {
               >
                 <div className="relative">
                   <motion.div
-                    animate={{ 
+                    animate={{
                       rotate: [0, -10, 10, -10, 0],
                       x: [0, 50, -50, 50, 0],
                       y: [0, -20, 20, -20, 0]
@@ -163,7 +221,7 @@ export function HomePage() {
               </motion.div>
             )}
             {status === 'gallery' && (
-              <motion.div 
+              <motion.div
                 key="gallery"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -175,7 +233,7 @@ export function HomePage() {
                     <h2 className="text-5xl md:text-6xl font-sketch">Your Future Home</h2>
                   </div>
                   <SketchButton variant="secondary" onClick={handleReset} className="flex items-center gap-2">
-                    <RefreshCw size={20} /> Try Another Space
+                    <RefreshCw size={20} /> Start New Project
                   </SketchButton>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-12 lg:gap-16">
@@ -186,7 +244,7 @@ export function HomePage() {
               </motion.div>
             )}
             {status === 'error' && (
-              <motion.div 
+              <motion.div
                 key="error"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -212,7 +270,7 @@ export function HomePage() {
           </p>
           <div className="max-w-2xl mx-auto p-4 sketch-border bg-charcoal text-white text-sm">
             <p>
-              <strong>Note:</strong> SketchMySpace is an AI-powered visualization tool. While we strive for magic, results are artistic interpretations. 
+              <strong>Note:</strong> SketchMySpace is an AI-powered visualization tool. While we strive for magic, results are artistic interpretations.
               There is a limit on the number of requests that can be made to the AI servers across all user apps in a given time period.
             </p>
           </div>

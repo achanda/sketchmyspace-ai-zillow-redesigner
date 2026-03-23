@@ -27,6 +27,20 @@ const customTools = [
         required: ['zillow_url']
       }
     }
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'mock_upload_redesign',
+      description: 'Generates AI interior design makeovers for user-uploaded room photos',
+      parameters: {
+        type: 'object',
+        properties: {
+          filenames: { type: 'array', items: { type: 'string' }, description: 'Names of uploaded files' }
+        },
+        required: ['filenames']
+      }
+    }
   }
 ];
 export async function getToolDefinitions() {
@@ -44,7 +58,6 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
           humidity: Math.floor(Math.random() * 100)
         };
       case 'mock_zillow_redesign': {
-        // Simulate processing delay
         await new Promise(resolve => setTimeout(resolve, 3000));
         const rooms = [
           {
@@ -66,6 +79,34 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
             description: "A sanctuary of soft textures. We added a velvet headboard and built-in reading nooks to turn this bedroom into a cloud."
           }
         ];
+        return { content: JSON.stringify({ rooms }) };
+      }
+      case 'mock_upload_redesign': {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        const filenames = (args.filenames as string[]) || ['Room 1'];
+        const rooms = filenames.map((name, i) => {
+          const presets = [
+            {
+              title: "Your Sunlit Sanctuary",
+              before: "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?auto=format&fit=crop&q=80&w=800",
+              after: "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&q=80&w=800",
+              description: "Based on your upload, we've reimagined this space with a Nordic touch—minimalist wood accents and warm ambient lighting."
+            },
+            {
+              title: "The Cozy Nook",
+              before: "https://images.unsplash.com/photo-1583847268964-b28dc2f51ac9?auto=format&fit=crop&q=80&w=800",
+              after: "https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&q=80&w=800",
+              description: "We took the bones of your photo and added a pop of personality with mid-century furniture and a gallery wall."
+            }
+          ];
+          const preset = presets[i % presets.length];
+          return {
+            name: `${preset.title} (${name})`,
+            before: preset.before,
+            after: preset.after,
+            description: preset.description
+          };
+        });
         return { content: JSON.stringify({ rooms }) };
       }
       default: {
