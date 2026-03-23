@@ -45,35 +45,40 @@ export class ChatAgent extends Agent<Env, ChatState> {
       this.setState({ ...this.state, model });
       this.chatHandler?.updateModel(model);
     }
+
+    const prevHistory = this.state.messages;
+    const storedContentStr = message.trim() + (images ? ` (with ${images.length} images)` : '');
+    const storedUserMessage = createMessage('user', storedContentStr);
+
     // Create multi-modal content if images are present
     let content: string | MessageContentPart[] = message.trim();
     if (images && images.length > 0) {
       content = [
-        { type: 'text', text: message.trim() },
+        { type: 'text' as const, text: message.trim() },
         ...images.map(img => ({
           type: 'image_url' as const,
           image_url: { url: img.startsWith('data:') ? img : `data:image/jpeg;base64,${img}` }
         }))
       ];
     }
-    const userMessage = createMessage('user', content);
-    this.setState({
-      ...this.state,
-      messages: [...this.state.messages, userMessage],
-      isProcessing: true
-    });
     try {
       if (!this.chatHandler) throw new Error('Chat handler not initialized');
+
       if (stream) {
+        this.setState({
+          ...this.state,
+          messages: [...prevHistory, storedUserMessage],
+          isProcessing: true,
+          streamingMessage: ''
+        });
         const { readable, writable } = new TransformStream();
         const writer = writable.getWriter();
         const encoder = createEncoder();
         (async () => {
           try {
-            this.setState({ ...this.state, streamingMessage: '' });
             const response = await this.chatHandler!.processMessage(
-              message,
-              this.state.messages,
+              content,
+              prevHistory,
               (chunk: string) => {
                 this.setState({
                   ...this.state,
@@ -85,30 +90,41 @@ export class ChatAgent extends Agent<Env, ChatState> {
             const assistantMessage = createMessage('assistant', response.content, response.toolCalls);
             this.setState({
               ...this.state,
-              messages: [...this.state.messages, assistantMessage],
+              messages: [...prevHistory, storedUserMessage, assistantMessage],
               isProcessing: false,
               streamingMessage: ''
             });
           } catch (error) {
             console.error('Streaming error:', error);
             const errorMsg = createMessage('assistant', "Oops! My pencil snapped. I couldn't finish the sketch.");
-            this.setState({ ...this.state, messages: [...this.state.messages, errorMsg], isProcessing: false });
+            this.setState({
+              ...this.state,
+              messages: [...prevHistory, storedUserMessage, errorMsg],
+              isProcessing: false,
+              streamingMessage: ''
+            });
           } finally {
             writer.close();
           }
         })();
         return createStreamResponse(readable);
       }
-      const response = await this.chatHandler.processMessage(message, this.state.messages);
+      const response = await this.chatHandler.processMessage(content, prevHistory);
       const assistantMessage = createMessage('assistant', response.content, response.toolCalls);
       this.setState({
         ...this.state,
-        messages: [...this.state.messages, assistantMessage],
+        messages: [...prevHistory, storedUserMessage, assistantMessage],
         isProcessing: false
       });
       return Response.json({ success: true, data: this.state });
     } catch (error) {
-      this.setState({ ...this.state, isProcessing: false });
+      console.error('Chat processing error:', error);
+      const errorMsg = createMessage('assistant', "Oops! Something went wrong with the AI. Please try again.");
+      this.setState({ 
+        ...this.state, 
+        messages: [...prevHistory, storedUserMessage, errorMsg], 
+        isProcessing: false 
+      });
       return Response.json({ success: false, error: API_RESPONSES.PROCESSING_ERROR }, { status: 500 });
     }
   }

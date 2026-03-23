@@ -17,12 +17,65 @@ interface Room {
   after: string;
   description: string;
 }
-const fileToBase64 = (file: File): Promise<string> => {
+const resizeImage = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = error => reject(error);
+    if (file.size > 5 * 1024 * 1024) {
+      reject(new Error('File too large. Max 5MB per image.'));
+      return;
+    }
+    
+    const img = new Image();
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d')!;
+    
+    img.onload = () => {
+      const maxSize = 800;
+      let { width, height } = img;
+      
+      if (width > height) {
+        if (width > maxSize) {
+          height *= maxSize / width;
+          width = maxSize;
+        }
+      } else {
+        if (height > maxSize) {
+          width *= maxSize / height;
+          height = maxSize;
+        }
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            const reader = new FileReader();
+            reader.onload = () => {
+              URL.revokeObjectURL(img.src);
+              resolve(reader.result as string);
+            };
+            reader.onerror = () => {
+              URL.revokeObjectURL(img.src);
+              reject(new Error('Failed to read resized image'));
+            };
+            reader.readAsDataURL(blob);
+          } else {
+            URL.revokeObjectURL(img.src);
+            reject(new Error('Failed to resize image'));
+          }
+        },
+        'image/jpeg',
+        0.8
+      );
+    };
+    
+    img.onerror = () => {
+      URL.revokeObjectURL(img.src);
+      reject(new Error('Failed to load image'));
+    };
+    img.src = URL.createObjectURL(file);
   });
 };
 export function HomePage() {
@@ -50,7 +103,21 @@ export function HomePage() {
       if (mode === 'url') {
         prompt = `Analyze this property: ${url}. Use the mock_zillow_redesign tool and return the output as a valid JSON object following the schema: { "rooms": [{ "name": string, "before": string, "after": string, "description": string }] }. Ensure "before" contains the original image URL.`;
       } else {
-        base64Images = await Promise.all(files.map(fileToBase64));
+        try {
+          base64Images = await Promise.all(
+            files.map(async (file) => {
+              try {
+                return await resizeImage(file);
+              } catch (fileErr: any) {
+                toast.error("Image Error", { description: fileErr.message });
+                throw fileErr;
+              }
+            })
+          );
+        } catch (err) {
+          setStatus('idle');
+          return;
+        }
         prompt = `I've uploaded ${files.length} room photos. Please analyze their style and use the mock_upload_redesign tool. Return results strictly as JSON: { "rooms": [...] }. For the "before" field of each room, please repeat the source image context or a placeholder if tool generated.`;
       }
       const response = await chatService.sendMessage(prompt, undefined, undefined, base64Images);

@@ -13,11 +13,11 @@ export class ChatHandler {
     this.model = model;
   }
   async processMessage(
-    message: string,
+    userContent: string | MessageContentPart[],
     conversationHistory: Message[],
     onChunk?: (chunk: string) => void
   ): Promise<{ content: string; toolCalls?: ToolCall[] }> {
-    const messages = this.buildConversationMessages(message, conversationHistory);
+    const messages = this.buildConversationMessages(userContent, conversationHistory);
     const toolDefinitions = await getToolDefinitions();
     if (onChunk) {
       const stream = await this.client.chat.completions.create({
@@ -28,7 +28,7 @@ export class ChatHandler {
         max_completion_tokens: 4096,
         stream: true,
       });
-      return this.handleStreamResponse(stream, message, conversationHistory, onChunk);
+      return this.handleStreamResponse(stream, conversationHistory, onChunk);
     }
     const completion = await this.client.chat.completions.create({
       model: this.model,
@@ -38,11 +38,10 @@ export class ChatHandler {
       max_tokens: 4096,
       stream: false
     });
-    return this.handleNonStreamResponse(completion, message, conversationHistory);
+    return this.handleNonStreamResponse(completion, conversationHistory);
   }
   private async handleStreamResponse(
     stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>,
-    message: string,
     conversationHistory: Message[],
     onChunk: (chunk: string) => void
   ) {
@@ -72,17 +71,17 @@ export class ChatHandler {
     }
     if (accumulatedToolCalls.length > 0) {
       const executedTools = await this.executeToolCalls(accumulatedToolCalls);
-      const finalResponse = await this.generateToolResponse(message, conversationHistory, accumulatedToolCalls, executedTools);
+      const finalResponse = await this.generateToolResponse(conversationHistory, accumulatedToolCalls, executedTools);
       return { content: finalResponse, toolCalls: executedTools };
     }
     return { content: fullContent };
   }
-  private async handleNonStreamResponse(completion: OpenAI.Chat.Completions.ChatCompletion, message: string, history: Message[]) {
+  private async handleNonStreamResponse(completion: OpenAI.Chat.Completions.ChatCompletion, history: Message[]) {
     const responseMessage = completion.choices[0]?.message;
     if (!responseMessage) return { content: 'I encountered an issue sketching.' };
     if (!responseMessage.tool_calls) return { content: responseMessage.content || 'I encountered an issue.' };
     const toolCalls = await this.executeToolCalls(responseMessage.tool_calls as ChatCompletionMessageFunctionToolCall[]);
-    const finalResponse = await this.generateToolResponse(message, history, responseMessage.tool_calls as any, toolCalls);
+    const finalResponse = await this.generateToolResponse(history, responseMessage.tool_calls as any, toolCalls);
     return { content: finalResponse, toolCalls };
   }
   private async executeToolCalls(openAiToolCalls: ChatCompletionMessageFunctionToolCall[]): Promise<ToolCall[]> {
@@ -96,13 +95,13 @@ export class ChatHandler {
       }
     }));
   }
-  private async generateToolResponse(userMsg: string, history: Message[], toolCalls: any[], results: ToolCall[]): Promise<string> {
+  private async generateToolResponse(history: Message[], toolCalls: any[], results: ToolCall[]): Promise<string> {
     const followUp = await this.client.chat.completions.create({
       model: this.model,
       messages: [
-        { 
-          role: 'system', 
-          content: `You are SketchMySpace, the whimsical AI designer. 
+        {
+          role: 'system',
+          content: `You are SketchMySpace, the whimsical AI designer.
           Respond to the redesign tool results by summarizing the changes in a charming, illustrative style.
           ALWAYS include a final JSON block at the end of your response for the UI to parse.
           The JSON block must follow this exact schema:
@@ -115,9 +114,9 @@ export class ChatHandler {
                 "description": "A whimsical description of the changes"
               }
             ]
-          }` 
+          }`
         },
-        ...history.slice(-3).map(m => ({ role: m.role as any, content: m.content as any })),
+        ...history.slice(-3).map(m => ({ role: m.role, content: Array.isArray(m.content) ? '[multimodal content]' : m.content })),
         {
           role: 'assistant',
           content: null,
@@ -128,12 +127,12 @@ export class ChatHandler {
           content: JSON.stringify(res.result),
           tool_call_id: toolCalls[i]?.id || res.id
         }))
-      ],
+      ] as any,
       max_tokens: 2048
     });
     return followUp.choices[0]?.message?.content || 'Designs completed.';
   }
-  private buildConversationMessages(userMessage: string, history: Message[]) {
+  private buildConversationMessages(userContent: string | MessageContentPart[], history: Message[]) {
     const systemPrompt = `You are "SketchMySpace", a whimsical AI architect and interior designer.
     When users provide images, ANALYZE their layout, current style, lighting, and potential for transformation.
     Use the 'mock_upload_redesign' tool for uploaded photos or 'mock_zillow_redesign' for Zillow links.
@@ -143,7 +142,11 @@ export class ChatHandler {
     If the user uploaded photos, describe how you improved their specific space.`;
     return [
       { role: 'system', content: systemPrompt },
-      ...history.slice(-5).map(m => ({ role: m.role, content: m.content })),
+      ...history.slice(-5).map(m => ({ 
+        role: m.role, 
+        content: Array.isArray(m.content) ? '[multimodal content]' : m.content 
+      })),
+      { role: 'user', content: Array.isArray(userContent) ? userContent : userContent }
     ];
   }
   updateModel(newModel: string): void { this.model = newModel; }
