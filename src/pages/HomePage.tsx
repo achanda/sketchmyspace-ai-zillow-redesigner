@@ -48,10 +48,10 @@ export function HomePage() {
       let prompt = '';
       let base64Images: string[] = [];
       if (mode === 'url') {
-        prompt = `Please use the mock_zillow_redesign tool to analyze this URL: ${url}. Return results as JSON with a "rooms" array.`;
+        prompt = `Analyze this property: ${url}. Use the mock_zillow_redesign tool and return the output as a valid JSON object following the schema: { "rooms": [{ "name": string, "before": string, "after": string, "description": string }] }. Ensure "before" contains the original image URL.`;
       } else {
         base64Images = await Promise.all(files.map(fileToBase64));
-        prompt = `I have uploaded ${files.length} room photos. Please analyze their style and layout, then use the mock_upload_redesign tool to create a makeover for each. Return results as JSON with a "rooms" array. For each room, provide a whimsical name and a design rationale.`;
+        prompt = `I've uploaded ${files.length} room photos. Please analyze their style and use the mock_upload_redesign tool. Return results strictly as JSON: { "rooms": [...] }. For the "before" field of each room, please repeat the source image context or a placeholder if tool generated.`;
       }
       const response = await chatService.sendMessage(prompt, undefined, undefined, base64Images);
       if (response.success) {
@@ -59,18 +59,28 @@ export function HomePage() {
         const lastMsg = historyRes.data?.messages.slice().reverse().find(m => m.role === 'assistant');
         if (lastMsg) {
           const contentStr = typeof lastMsg.content === 'string' ? lastMsg.content : '';
+          // Robust JSON extraction
           const jsonMatch = contentStr.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
-            const data = JSON.parse(jsonMatch[0]);
-            if (data.rooms) {
-              setRooms(data.rooms);
-              setStatus('gallery');
-              confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-            } else {
-              throw new Error("Blueprint parsing failed.");
+            try {
+              const data = JSON.parse(jsonMatch[0]);
+              if (data.rooms && Array.isArray(data.rooms)) {
+                // Ensure fallback for missing before images
+                const validatedRooms = data.rooms.map((r: any) => ({
+                  ...r,
+                  before: r.before || "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?auto=format&fit=crop&q=80&w=800"
+                }));
+                setRooms(validatedRooms);
+                setStatus('gallery');
+                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+              } else {
+                throw new Error("The blueprint was missing its rooms!");
+              }
+            } catch (parseErr) {
+              throw new Error("The AI's handwriting was too messy to read (JSON parse error).");
             }
           } else {
-            throw new Error("No design data found in response.");
+            throw new Error("No design blueprint found in the AI's response.");
           }
         }
       } else {
@@ -114,54 +124,90 @@ export function HomePage() {
                 </div>
                 <div className="max-w-2xl mx-auto space-y-8">
                   <div className="flex justify-center gap-4">
-                    <button onClick={() => setMode('url')} className={cn("px-6 py-2 font-sketch text-lg sketch-border transition-all", mode === 'url' ? "bg-sketch-orange sketch-shadow" : "bg-white opacity-60")}>
+                    <button 
+                      onClick={() => setMode('url')} 
+                      className={cn("px-6 py-2 font-sketch text-lg sketch-border transition-all", mode === 'url' ? "bg-sketch-orange sketch-shadow" : "bg-white opacity-60")}
+                    >
                       <LinkIcon size={18} className="inline mr-2" /> URL
                     </button>
-                    <button onClick={() => setMode('upload')} className={cn("px-6 py-2 font-sketch text-lg sketch-border transition-all", mode === 'upload' ? "bg-sketch-orange sketch-shadow" : "bg-white opacity-60")}>
+                    <button 
+                      onClick={() => setMode('upload')} 
+                      className={cn("px-6 py-2 font-sketch text-lg sketch-border transition-all", mode === 'upload' ? "bg-sketch-orange sketch-shadow" : "bg-white opacity-60")}
+                    >
                       <UploadIcon size={18} className="inline mr-2" /> Photos
                     </button>
                   </div>
                   <form onSubmit={handleRedesign} className="space-y-6">
                     {mode === 'url' ? (
-                      <input type="text" placeholder="Zillow URL..." value={url} onChange={e => setUrl(e.target.value)} className="w-full px-8 py-6 text-xl sketch-border sketch-shadow bg-white outline-none" />
+                      <input 
+                        type="text" 
+                        placeholder="Paste Zillow URL here..." 
+                        value={url} 
+                        onChange={e => setUrl(e.target.value)} 
+                        className="w-full px-8 py-6 text-xl sketch-border sketch-shadow bg-white outline-none focus:ring-2 ring-sketch-orange/50 transition-all" 
+                      />
                     ) : (
                       <SketchUpload files={files} setFiles={setFiles} />
                     )}
-                    <SketchButton type="submit" isLoading={status !== 'idle'}>Magic Redesign</SketchButton>
+                    <SketchButton type="submit" isLoading={status === 'sketching'}>
+                      Magic Redesign
+                    </SketchButton>
                   </form>
                 </div>
               </motion.div>
             )}
             {status === 'sketching' && (
               <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-24 space-y-8">
-                <motion.div animate={{ rotate: [0, 10, -10, 0], x: [0, 50, -50, 0] }} transition={{ duration: 3, repeat: Infinity }} className="text-8xl">✏️</motion.div>
-                <h3 className="text-4xl font-sketch animate-pulse">Our AI is sketching...</h3>
+                <motion.div 
+                  animate={{ 
+                    rotate: [0, 10, -10, 0], 
+                    x: [0, 50, -50, 0],
+                    y: [0, -20, 0] 
+                  }} 
+                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }} 
+                  className="text-8xl"
+                >
+                  ✏️
+                </motion.div>
+                <div className="text-center space-y-2">
+                  <h3 className="text-4xl font-sketch animate-pulse">Our AI is sketching...</h3>
+                  <p className="font-display italic text-muted-foreground">Adding floor-to-ceiling windows and mood lighting...</p>
+                </div>
               </motion.div>
             )}
             {status === 'gallery' && (
               <motion.div key="gallery" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
-                <div className="flex justify-between items-end border-b-2 border-charcoal/10 pb-8">
+                <div className="flex flex-col md:flex-row justify-between items-center gap-6 border-b-2 border-charcoal/10 pb-8">
                   <h2 className="text-5xl font-sketch">The Reveal</h2>
-                  <SketchButton variant="secondary" onClick={handleReset}>New Project</SketchButton>
+                  <SketchButton variant="secondary" onClick={handleReset}>
+                    Start New Project
+                  </SketchButton>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                  {rooms.map((room, i) => <RoomCard key={i} {...room} />)}
+                  {rooms.map((room, i) => (
+                    <RoomCard key={i} {...room} />
+                  ))}
                 </div>
               </motion.div>
             )}
             {status === 'error' && (
-              <motion.div key="error" className="text-center py-24 space-y-8">
+              <motion.div key="error" className="max-w-lg mx-auto text-center py-24 space-y-8 bg-white sketch-border p-12 sketch-shadow">
                 <AlertCircle size={64} className="mx-auto text-red-500" />
-                <h3 className="text-4xl font-sketch">Snafu!</h3>
-                <p className="italic text-muted-foreground">"{error}"</p>
-                <SketchButton onClick={handleReset}>Try Again</SketchButton>
+                <div className="space-y-4">
+                  <h3 className="text-4xl font-sketch">Snafu!</h3>
+                  <p className="italic text-muted-foreground text-lg leading-relaxed">"{error}"</p>
+                </div>
+                <SketchButton onClick={handleReset} variant="primary">
+                  Try Again
+                </SketchButton>
               </motion.div>
             )}
           </AnimatePresence>
-          <footer className="mt-24 pt-12 border-t-2 border-charcoal/10 text-center space-y-4">
-            <p className="font-sketch text-xl opacity-60">Created with 🧡 for dreamers.</p>
-            <div className="max-w-xl mx-auto text-xs opacity-50 bg-charcoal text-white p-4 sketch-border">
-              Note: AI usage limits apply. Results are artistic interpretations.
+          <footer className="mt-24 pt-12 border-t-2 border-charcoal/10 text-center space-y-6">
+            <p className="font-sketch text-2xl opacity-60">Created with 🧡 for dreamers.</p>
+            <div className="max-w-2xl mx-auto text-sm opacity-60 bg-charcoal text-white p-6 sketch-border sketch-shadow-sm">
+              <p className="font-bold mb-2 uppercase tracking-widest text-xs">A Note for Visionaries:</p>
+              This project utilizes advanced AI capabilities. Please note there is a limit on the number of requests that can be made to the AI servers across all user apps in a given time period. Results are whimsical, artistic interpretations.
             </div>
           </footer>
         </div>

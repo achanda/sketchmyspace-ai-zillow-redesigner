@@ -1,6 +1,6 @@
 import { Agent } from 'agents';
 import type { Env } from './core-utils';
-import type { ChatState, MessageContentPart } from './types';
+import type { ChatState, MessageContentPart, Message } from './types';
 import { ChatHandler } from './chat';
 import { API_RESPONSES } from './config';
 import { createMessage, createStreamResponse, createEncoder } from './utils';
@@ -56,7 +56,7 @@ export class ChatAgent extends Agent<Env, ChatState> {
         }))
       ];
     }
-    const userMessage = createMessage('user', content as any);
+    const userMessage = createMessage('user', content);
     this.setState({
       ...this.state,
       messages: [...this.state.messages, userMessage],
@@ -91,7 +91,7 @@ export class ChatAgent extends Agent<Env, ChatState> {
             });
           } catch (error) {
             console.error('Streaming error:', error);
-            const errorMsg = createMessage('assistant', 'Sorry, I hit a snag sketching that.');
+            const errorMsg = createMessage('assistant', "Oops! My pencil snapped. I couldn't finish the sketch.");
             this.setState({ ...this.state, messages: [...this.state.messages, errorMsg], isProcessing: false });
           } finally {
             writer.close();

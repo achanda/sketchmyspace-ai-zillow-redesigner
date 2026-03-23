@@ -82,7 +82,7 @@ export class ChatHandler {
     if (!responseMessage) return { content: 'I encountered an issue sketching.' };
     if (!responseMessage.tool_calls) return { content: responseMessage.content || 'I encountered an issue.' };
     const toolCalls = await this.executeToolCalls(responseMessage.tool_calls as ChatCompletionMessageFunctionToolCall[]);
-    const finalResponse = await this.generateToolResponse(message, history, responseMessage.tool_calls, toolCalls);
+    const finalResponse = await this.generateToolResponse(message, history, responseMessage.tool_calls as any, toolCalls);
     return { content: finalResponse, toolCalls };
   }
   private async executeToolCalls(openAiToolCalls: ChatCompletionMessageFunctionToolCall[]): Promise<ToolCall[]> {
@@ -100,7 +100,23 @@ export class ChatHandler {
     const followUp = await this.client.chat.completions.create({
       model: this.model,
       messages: [
-        { role: 'system', content: 'You are an illustrative AI interior designer. Respond naturally to the tool results.' },
+        { 
+          role: 'system', 
+          content: `You are SketchMySpace, the whimsical AI designer. 
+          Respond to the redesign tool results by summarizing the changes in a charming, illustrative style.
+          ALWAYS include a final JSON block at the end of your response for the UI to parse.
+          The JSON block must follow this exact schema:
+          {
+            "rooms": [
+              {
+                "name": "A creative room name",
+                "before": "The original image URL provided in tool result",
+                "after": "The redesigned image URL provided in tool result",
+                "description": "A whimsical description of the changes"
+              }
+            ]
+          }` 
+        },
         ...history.slice(-3).map(m => ({ role: m.role as any, content: m.content as any })),
         {
           role: 'assistant',
@@ -118,12 +134,13 @@ export class ChatHandler {
     return followUp.choices[0]?.message?.content || 'Designs completed.';
   }
   private buildConversationMessages(userMessage: string, history: Message[]) {
-    const systemPrompt = `You are "SketchMySpace", a whimsical AI architect. 
-    When users provide images, ANALYZE their layout, style, and lighting. 
-    Then use the 'mock_upload_redesign' tool. 
-    IMPORTANT: For each uploaded photo, identify the 'room_type' and 'detected_style'. 
-    Pass the user's actual image URL (the base64 string) into the 'before' field for each room in your tool call if the tool supported it, but since our tool generates rooms, ensure you match your analysis to the output.
-    Always return a final JSON object wrapped in markdown or plaintext for the UI to parse.`;
+    const systemPrompt = `You are "SketchMySpace", a whimsical AI architect and interior designer.
+    When users provide images, ANALYZE their layout, current style, lighting, and potential for transformation.
+    Use the 'mock_upload_redesign' tool for uploaded photos or 'mock_zillow_redesign' for Zillow links.
+    CRITICAL: Your final response MUST contain a JSON block representing the redesigned rooms.
+    Schema: { "rooms": [{ "name": string, "before": string, "after": string, "description": string }] }
+    In the "description", use warm, creative language (e.g., "We replaced the tired carpets with herringbone oak...").
+    If the user uploaded photos, describe how you improved their specific space.`;
     return [
       { role: 'system', content: systemPrompt },
       ...history.slice(-5).map(m => ({ role: m.role, content: m.content })),
