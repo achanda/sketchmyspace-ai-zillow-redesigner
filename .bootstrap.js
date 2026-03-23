@@ -77,12 +77,7 @@ function updateWranglerJsonc() {
 }
 
 function runSetupCommands() {
-    const commands = [
-    "bun add react-compare-slider@^1.1.3",
-    "bun add canvas-confetti@^1.9.0",
-    "bun install react-compare-slider canvas-confetti react-dropzone",
-    "bun install react-dropzone"
-];
+    const commands = [];
     
     if (commands.length === 0) {
         console.log('⊘ No setup commands to run');
