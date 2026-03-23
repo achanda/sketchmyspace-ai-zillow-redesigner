@@ -80,7 +80,7 @@ function runSetupCommands() {
     const commands = [
     "bun add react-compare-slider@^1.1.3",
     "bun add canvas-confetti@^1.9.0",
-    "bun install react-compare-slider canvas-confetti",
+    "bun install react-compare-slider canvas-confetti react-dropzone",
     "bun install react-dropzone"
 ];
     
