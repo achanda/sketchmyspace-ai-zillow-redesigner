@@ -47,7 +47,7 @@ export function HomePage() {
         Strictly return ONLY the JSON string.`;
       } else {
         const filenames = files.map(f => f.name);
-        prompt = `I have uploaded these room photos: ${filenames.join(', ')}. 
+        prompt = `I have uploaded these room photos: ${filenames.join(', ')}.
         Please use the mock_upload_redesign tool to create makeovers for them.
         Return the results as a JSON object with a "rooms" array, where each room has "name", "before", "after", and "description".
         Strictly return ONLY the JSON string.`;
@@ -61,20 +61,24 @@ export function HomePage() {
             const jsonMatch = lastMsg.content.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
               const data = JSON.parse(jsonMatch[0]);
-              setRooms(data.rooms);
-              setStatus('gallery');
-              confetti({
-                particleCount: 150,
-                spread: 70,
-                origin: { y: 0.6 },
-                colors: ['#F6AD55', '#2D3748', '#FDFBF7']
-              });
+              if (data && Array.isArray(data.rooms)) {
+                setRooms(data.rooms);
+                setStatus('gallery');
+                confetti({
+                  particleCount: 150,
+                  spread: 70,
+                  origin: { y: 0.6 },
+                  colors: ['#F6AD55', '#2D3748', '#FDFBF7']
+                });
+              } else {
+                throw new Error("The design blueprints seem incomplete. Please try again!");
+              }
             } else {
               throw new Error("Could not find design details in the magic ink!");
             }
           } catch (e) {
             console.error("Parse error:", e);
-            throw new Error("The AI got a bit too creative. Let's try again!");
+            throw new Error(e instanceof Error ? e.message : "The AI got a bit too creative. Let's try again!");
           }
         }
       } else {
@@ -124,7 +128,6 @@ export function HomePage() {
                   </p>
                 </div>
                 <div className="max-w-2xl mx-auto space-y-8">
-                  {/* Mode Toggles */}
                   <div className="flex justify-center gap-4">
                     <button
                       onClick={() => setMode('url')}
@@ -173,7 +176,11 @@ export function HomePage() {
                         </motion.div>
                       )}
                     </AnimatePresence>
-                    <SketchButton type="submit" className="w-full md:w-auto mx-auto" isLoading={status === 'sketching'}>
+                    <SketchButton 
+                      type="submit" 
+                      className="w-full md:w-auto mx-auto" 
+                      isLoading={status !== 'idle'}
+                    >
                       Magic Redesign
                     </SketchButton>
                   </form>
